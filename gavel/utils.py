@@ -2,7 +2,8 @@ from gavel import celery
 import gavel.settings as settings
 import gavel.crowd_bt as crowd_bt
 import gavel.constants as constants
-from flask import Markup, Response, request, render_template
+from markupsafe import Markup
+from flask import Response, request, render_template
 import markdown
 import requests
 from functools import wraps
@@ -16,6 +17,9 @@ import email
 import email.mime.multipart
 import email.mime.text
 import json
+import logging
+
+logger = logging.getLogger('gavel.utils')
 
 def gen_secret(length):
     return base64.b32encode(os.urandom(length))[:length].decode('utf8').lower()
@@ -48,8 +52,8 @@ def data_from_csv_string(string):
     return list(reader)
 
 def get_paragraphs(message):
-    paragraphs = re.split(r'\n\n+', message)
-    paragraphs = [i.replace('\n', ' ') for i in paragraphs if i]
+    paragraphs = re.split(r'\\n\\n+', message)
+    paragraphs = [i.replace('\\n', ' ') for i in paragraphs if i]
     return paragraphs
 
 @celery.task
@@ -60,20 +64,29 @@ def send_emails(emails):
     This function takes a list [(to_address, subject, body)].
     '''
 
-    if settings.EMAIL_AUTH_MODE == 'tls':
-        server = smtplib.SMTP(settings.EMAIL_HOST, settings.EMAIL_PORT)
-        server.ehlo()
-        server.starttls()
-        server.ehlo()
-    elif settings.EMAIL_AUTH_MODE == 'ssl':
-        server = smtplib.SMTP_SSL(settings.EMAIL_HOST, settings.EMAIL_PORT)
-    elif settings.EMAIL_AUTH_MODE == 'none':
-        server = smtplib.SMTP(settings.EMAIL_HOST, settings.EMAIL_PORT)
-        server.ehlo()
-    else:
-        raise ValueError('unsupported auth mode: %s' % settings.EMAIL_AUTH_MODE)
+    if settings.DISABLE_EMAIL:
+        logger.info('Email is disabled — skipping %d email(s)', len(emails))
+        return
 
-    server.login(settings.EMAIL_USER, settings.EMAIL_PASSWORD)
+    try:
+        if settings.EMAIL_AUTH_MODE == 'tls':
+            server = smtplib.SMTP(settings.EMAIL_HOST, settings.EMAIL_PORT)
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+        elif settings.EMAIL_AUTH_MODE == 'ssl':
+            server = smtplib.SMTP_SSL(settings.EMAIL_HOST, settings.EMAIL_PORT)
+        elif settings.EMAIL_AUTH_MODE == 'none':
+            server = smtplib.SMTP(settings.EMAIL_HOST, settings.EMAIL_PORT)
+            server.ehlo()
+        else:
+            raise ValueError('unsupported auth mode: %s' % settings.EMAIL_AUTH_MODE)
+
+        server.login(settings.EMAIL_USER, settings.EMAIL_PASSWORD)
+    except Exception as e:
+        logger.error('Failed to connect to email server: %s', str(e))
+        logger.error('Email sending aborted for %d email(s). Check EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASSWORD.', len(emails))
+        return
 
     exceptions = []
     for e in emails:
@@ -90,11 +103,16 @@ def send_emails(emails):
             msg.attach(email.mime.text.MIMEText(body, 'plain'))
             server.sendmail(settings.EMAIL_FROM, recipients, msg.as_string())
         except Exception as e:
-            exceptions.append(e) # XXX is there a cleaner way to handle this?
+            logger.error('Failed to send email: %s', str(e))
+            exceptions.append(e)
 
-    server.quit()
+    try:
+        server.quit()
+    except Exception:
+        pass
+
     if exceptions:
-        raise Exception('Error sending some emails: %s' % exceptions)
+        logger.error('Error sending some emails: %s', exceptions)
 
 def send_sendgrid_emails(emails):
     exceptions = []

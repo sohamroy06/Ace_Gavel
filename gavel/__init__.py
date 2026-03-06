@@ -3,6 +3,13 @@
 # This software is released under AGPLv3. See the included LICENSE.txt for
 # details.
 
+import logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+)
+logger = logging.getLogger('gavel')
+
 from flask import Flask
 app = Flask(__name__)
 
@@ -10,7 +17,8 @@ import gavel.settings as settings
 app.config['SQLALCHEMY_DATABASE_URI'] = settings.DB_URI
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = settings.SECRET_KEY
-app.config['SERVER_NAME'] = settings.SERVER_NAME
+# Do NOT set SERVER_NAME — it breaks Railway/cloud deployments where the
+# hostname is dynamic. Flask infers it from the request automatically.
 
 if settings.PROXY:
     from werkzeug.middleware.proxy_fix import ProxyFix
@@ -29,13 +37,15 @@ assets.register('scss_all', scss)
 
 from celery import Celery
 app.config['CELERY_BROKER_URL'] = settings.BROKER_URI
+app.config['CELERY_RESULT_BACKEND'] = settings.BROKER_URI
 celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
 celery.conf.update(app.config)
 
 from gavel.models import db
-db.app = app
 db.init_app(app)
 
 import gavel.template_filters # registers template filters
 
 import gavel.controllers # registers controllers
+
+logger.info('Gavel application initialized successfully')

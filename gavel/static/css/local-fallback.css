@@ -1,0 +1,61 @@
+/* Local fallback stylesheet to avoid runtime SCSS compilation issues on newer Python. */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Lato", "Segoe UI", Arial, sans-serif;
+  font-size: 16px;
+  color: #111;
+  background: #fff;
+}
+
+#content {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+#footer {
+  text-align: center;
+  padding: 1rem;
+  color: #555;
+}
+
+a {
+  color: #0077cc;
+  text-decoration: none;
+}
+
+a:hover,
+a:focus {
+  text-decoration: underline;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border: 1px solid #333;
+  padding: 0.25rem 0.4rem;
+}
+
+th {
+  background: #efefef;
+}
+
+input,
+textarea,
+button,
+select {
+  font: inherit;
+}

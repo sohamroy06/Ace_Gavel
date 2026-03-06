@@ -1,6 +1,21 @@
 import gavel.constants as constants
 import os
 import yaml
+import logging
+
+# Load .env file if present (for local development)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+)
+logger = logging.getLogger('gavel')
 
 BASE_DIR = os.path.dirname(__file__)
 CONFIG_FILE = os.path.join(BASE_DIR, '..', 'config.yaml')
@@ -11,8 +26,14 @@ class Config(object):
 
     def __init__(self, config_file):
         if not _bool(os.environ.get('IGNORE_CONFIG_FILE', False)):
-            with open(config_file) as f:
-                self._config = yaml.safe_load(f)
+            try:
+                with open(config_file) as f:
+                    self._config = yaml.safe_load(f)
+                if self._config is None:
+                    self._config = {}
+            except FileNotFoundError:
+                logger.warning('Config file not found: %s — using environment variables only', config_file)
+                self._config = {}
         else:
             self._config = {}
 
@@ -54,9 +75,8 @@ def _list(item):
     return [item]
 
 # SQLAlchemy used to support URIs starting with 'postgres://', but it now
-# requires that they start with 'postgresql://'. Heroku sets the environment
-# variable 'DATABASE_URL' to 'postgres://...', so this breaks our app. This
-# function fixes the DB URI.
+# requires that they start with 'postgresql://'. Heroku/Railway may set
+# 'DATABASE_URL' to 'postgres://...', so this fixes it.
 def _postgres_uri(uri):
     if uri.startswith('postgres://'):
         return uri.replace('postgres://', 'postgresql://', 1)
@@ -67,11 +87,12 @@ c = Config(CONFIG_FILE)
 # note: this should be kept in sync with 'config.template.yaml' and
 # 'config.vagrant.yaml'
 SERVER_NAME =          c.get('server_name',     'SERVER_NAME',               default=None)
-PROXY =          _bool(c.get('proxy',           'PROXY',                     default=False))
+PROXY =          _bool(c.get('proxy',           'PROXY',                     default=True))  # True by default for Railway
 ADMIN_PASSWORD =       c.get('admin_password',  'ADMIN_PASSWORD')
 DB_URI = _postgres_uri(c.get('db_uri',          ['DATABASE_URL', 'DB_URI'],  default='postgresql://localhost/gavel'))
 BROKER_URI =           c.get('broker_uri',      ['REDIS_URL', 'BROKER_URI'], default='redis://localhost:6379/0')
 SECRET_KEY =           c.get('secret_key',      'SECRET_KEY')
+BASE_URL =             c.get('base_url',        'BASE_URL',                  default=None)
 MIN_VIEWS =        int(c.get('min_views',       'MIN_VIEWS',                 default=2))
 TIMEOUT =        float(c.get('timeout',         'TIMEOUT',                   default=5.0)) # in minutes
 WELCOME_MESSAGE =      c.get('welcome_message',                              default=constants.DEFAULT_WELCOME_MESSAGE)
@@ -82,13 +103,24 @@ WAIT_MESSAGE =         c.get('wait_message',                                 def
 DISABLE_EMAIL =  _bool(c.get('disable_email',   'DISABLE_EMAIL',             default=False))
 EMAIL_HOST =           c.get('email_host',      'EMAIL_HOST',                default='smtp.gmail.com')
 EMAIL_PORT =       int(c.get('email_port',      'EMAIL_PORT',                default=587))
-EMAIL_FROM =           c.get('email_from',      'EMAIL_FROM')
-EMAIL_USER =           c.get('email_user',      'EMAIL_USER')
-EMAIL_PASSWORD =       c.get('email_password',  'EMAIL_PASSWORD')
+EMAIL_FROM =           c.get('email_from',      ['EMAIL_FROM', 'MAIL_USERNAME'],  default='_unused_')
+EMAIL_USER =           c.get('email_user',      ['EMAIL_USER', 'MAIL_USERNAME'],  default='_unused_')
+EMAIL_PASSWORD =       c.get('email_password',  ['EMAIL_PASSWORD', 'MAIL_PASSWORD'], default='_unused_')
 EMAIL_AUTH_MODE =      c.get('email_auth_mode', 'EMAIL_AUTH_MODE',           default='tls').lower()
 EMAIL_CC =       _list(c.get('email_cc',        'EMAIL_CC',                  default=[]))
 EMAIL_SUBJECT =        c.get('email_subject',                                default=constants.DEFAULT_EMAIL_SUBJECT)
 EMAIL_BODY =           c.get('email_body',                                   default=constants.DEFAULT_EMAIL_BODY)
-SEND_STATS =     _bool(c.get('send_stats',      'SEND_STATS',                default=True))
+SEND_STATS =     _bool(c.get('send_stats',      'SEND_STATS',               default=True))
 USE_SENDGRID =   _bool(c.get('use_sendgrid',    'USE_SENDGRID',              default=False))
 SENDGRID_API_KEY =     c.get('sendgrid_api_key', 'SENDGRID_API_KEY',         default=None)
+
+# Auto-disable email if credentials are not configured
+if EMAIL_USER == '_unused_' or EMAIL_PASSWORD == '_unused_':
+    if not DISABLE_EMAIL:
+        logger.info('Email credentials not configured — email disabled automatically')
+        DISABLE_EMAIL = True
+
+# Log key config (without secrets)
+logger.info('Database: %s', DB_URI.split('@')[-1] if '@' in DB_URI else DB_URI)
+logger.info('Broker: %s', BROKER_URI.split('@')[-1] if '@' in BROKER_URI else BROKER_URI)
+logger.info('Email disabled: %s', DISABLE_EMAIL)

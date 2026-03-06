@@ -7,8 +7,9 @@ celery
 gunicorn
 humanize
 numpy
-psycopg2
+psycopg2-binary
 pyScss
+python-dotenv
 redis
 requests
 scipy

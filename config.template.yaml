@@ -184,3 +184,10 @@ email_body: null
 # event to this list (https://github.com/anishathalye/gavel/wiki/Users), at the
 # very least.
 send_stats: null
+
+# can also be specified as the 'BASE_URL' environment variable
+# defaults to 'None'
+#
+# the base URL of your deployment. used for generating links in emails
+# when SERVER_NAME is not set. example: 'https://judging.example.com'
+base_url: null
