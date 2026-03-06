@@ -114,6 +114,14 @@ SEND_STATS =     _bool(c.get('send_stats',      'SEND_STATS',               defa
 USE_SENDGRID =   _bool(c.get('use_sendgrid',    'USE_SENDGRID',              default=False))
 SENDGRID_API_KEY =     c.get('sendgrid_api_key', 'SENDGRID_API_KEY',         default=None)
 
+# Railway/Supabase deployment must use PostgreSQL (not SQLite or other engines).
+if not DB_URI.startswith(('postgresql://', 'postgres://')):
+    raise RuntimeError('Invalid database configuration: set DATABASE_URL to a PostgreSQL URI')
+
+# Upstash/Railway Redis URLs are typically redis:// or rediss://.
+if not BROKER_URI.startswith(('redis://', 'rediss://')):
+    raise RuntimeError('Invalid broker configuration: set REDIS_URL to a Redis URI')
+
 # Auto-disable email if credentials are not configured
 if EMAIL_USER == '_unused_' or EMAIL_PASSWORD == '_unused_':
     if not DISABLE_EMAIL:

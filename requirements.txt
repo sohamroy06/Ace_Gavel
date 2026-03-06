@@ -21,8 +21,8 @@ kombu>=5.3,<6.0
 gunicorn>=21.0,<23.0
 
 # Scientific
-numpy>=1.26,<3.0
-scipy>=1.11,<2.0
+numpy==1.26.4
+scipy==1.11.4
 
 # Utilities
 humanize>=4.0,<5.0
